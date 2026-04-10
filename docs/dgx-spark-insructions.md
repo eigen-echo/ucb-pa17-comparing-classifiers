@@ -64,7 +64,7 @@ uname -m    # should print: aarch64
 mamba create -n bank-svm -c rapidsai -c conda-forge -c nvidia \
     rapids=25.02 python=3.11 'cuda-version>=12.5' \
     scikit-learn imbalanced-learn jupyterlab \
-    pandas numpy matplotlib seaborn
+    pandas numpy matplotlib seaborn papermill
 
 # 3. Activate
 conda activate bank-svm
@@ -111,9 +111,73 @@ If you see `sklearn` on the DGX Spark, the `bank-svm` environment is not active 
 
 ---
 
+## Step 7 — Run notebooks from the command line with papermill
+
+`papermill` is the recommended way to execute notebooks on the Spark. Unlike `jupyter nbconvert` (which buffers all output until the cell finishes), papermill streams each cell's `print()` output to the terminal in real time — essential for watching the 200-fit GridSearchCV progress.
+
+### Install (already included in the Step 4 `mamba create` command)
+
+```bash
+pip install papermill   # only needed if you skipped the mamba create step
+```
+
+### Run a single notebook
+
+```bash
+papermill \
+    notebooks/02-model-training-additional-full.ipynb \
+    notebooks/02-model-training-additional-full.ipynb \
+    --log-output \
+    --log-level INFO \
+    --progress-bar
+```
+
+- Both paths identical → outputs are saved back **in place**
+- `--log-output` — streams `print()` from every cell live to the terminal
+- `--log-level INFO` — also shows papermill's own cell-start/end events
+- `--progress-bar` — top-level bar showing which cell number is executing
+
+### Run both notebooks sequentially, saving a log file alongside each
+
+```bash
+for nb in notebooks/02-model-training-additional-full.ipynb \
+           notebooks/03-model-training-full.ipynb; do
+    echo "======== Running $nb ========"
+    papermill "$nb" "$nb" \
+        --log-output \
+        --log-level INFO \
+        --progress-bar 2>&1 | tee "${nb%.ipynb}.log"
+done
+```
+
+Each notebook gets a `.log` file next to it (e.g. `02-model-training-additional-full.log`) with the full run trace.
+
+### What the live output looks like
+
+Because `verbose=2` is set on `GridSearchCV` for the cuML/GPU code path, you will see every fit streamed as it completes:
+
+```
+Executing:  18%|████▌      | 6/34 [00:12<00:48]   ← papermill cell progress bar
+...
+Tuning SVM...
+Fitting 5 folds for each of 40 candidates, totalling 200 fits
+[CV 1/5] END model__C=0.01, model__kernel=linear, model__gamma=scale; total time=  4.2s
+[CV 2/5] END model__C=0.01, model__kernel=linear, model__gamma=scale; total time=  3.9s
+[CV 3/5] END model__C=0.01, model__kernel=linear, model__gamma=scale; total time=  4.1s
+...
+[CV 5/5] END model__C=100, model__kernel=rbf,    model__gamma=auto;  total time=  8.7s
+  Best params  : {'model__C': 10, 'model__kernel': 'rbf', 'model__gamma': 'scale'}
+  CV ROC-AUC   : 0.8041
+  GridSearch   : 312.4s
+```
+
+> `verbose=2` is only active when `_SVC_BACKEND == 'cuml'` (i.e. on the DGX Spark). On a CPU laptop the SVM grid search stays silent.
+
+---
+
 ## Monitoring GPU utilisation during GridSearchCV
 
-Open a second terminal while cell 28 (GridSearchCV) is running:
+Open a second terminal while papermill is running:
 
 ```bash
 watch -n 1 nvidia-smi
