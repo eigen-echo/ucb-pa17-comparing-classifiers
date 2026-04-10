@@ -19,7 +19,7 @@ ucb-pa17-comparing-classifiers/
 ├── docs/
 │   ├── assignment_instructions.md   # Original assignment brief
 │   ├── findings.md                  # Summary of findings across all notebooks
-│   └── dgx-spark-insructions.md    # GPU environment setup (feature/setup-for-dgx-spark branch)
+│   └── dgx-spark-insructions.md    # GPU environment setup (available in feature/setup-for-dgx-spark branch)
 ├── notebooks/
 │   ├── 00-exploratary-data-analysis.ipynb
 │   ├── 01-model-training-small-dataset.ipynb
@@ -28,7 +28,7 @@ ucb-pa17-comparing-classifiers/
 │   └── 04-model-training-small-dataset-smote.ipynb
 ├── src/
 │   ├── setup.py                     # Data download script
-│   └── train_additional_full.py    # Standalone training script for notebook 02 (feature/setup-for-dgx-spark branch)
+│   └── train_additional_full.py    # Standalone training script for notebook 02 (available in feature/setup-for-dgx-spark branch)
 └── README.md
 ```
 
@@ -132,20 +132,6 @@ The experiment uses an **NVIDIA DGX Spark** — a personal AI supercomputer buil
 | **Unified Memory** | 128 GB (CPU + GPU shared pool) |
 | **Compute Capability** | 12.1 |
 | **Architecture** | aarch64 (ARM64 Grace CPU) |
-
-### What was changed
-
-- **SVC backend:** `sklearn.svm.SVC` replaced with `cuml.svm.SVC` (NVIDIA RAPIDS) via a dual-path import — the notebooks and script automatically fall back to sklearn on CPU machines.
-- **Iteration cap removed:** `max_iter=2000` is lifted on the GPU path (`max_iter=-1`); the original cap is preserved on the CPU path to avoid the 6+ hour hang.
-- **Expanded parameter grid:** `rbf` kernel restored (previously too slow on CPU) and `C` extended to `[0.01, 0.1, 1, 10, 100]` — 200 total fits vs. 60 before.
-- **Standalone training script:** `src/train_additional_full.py` added as an alternative to papermill for headless execution on the Spark, with timestamped logging and PNG plot outputs.
-
-### Observations
-
-Results and timing from the DGX Spark run are being recorded in the branch as they become available. Initial observations:
-
-- The GPU environment setup itself has notable friction: RAPIDS must be installed via conda (`mamba`), `scikit-learn` must be pinned to `1.5.x` (sklearn 1.6 introduced `__sklearn_tags__()` which cuML has not yet implemented), and cuML's `SVC.predict_proba` raises unless `probability=True` is set at fit time.
-- Each of the 200 SVM fits on the ~41K row dataset completes in ~20s on the GB10, making the full GridSearchCV tractable in under two hours — compared to the 6+ hour non-convergence on CPU.
 
 ### Branch and setup instructions
 
