@@ -314,7 +314,7 @@ param_grids = {
     "KNN": {
         "pipe": knn_pipe,
         "params": {
-            "model__n_neighbors": [3, 5, 11, 21],
+            "model__n_neighbors": [3, 5, 11, 21, 29],
             "model__weights":     ["uniform", "distance"],
             "model__metric":      ["euclidean", "manhattan"],
         },
@@ -339,8 +339,9 @@ param_grids = {
 
 # GPU estimators don't parallelize well under joblib — one worker per GPU
 per_model_n_jobs  = {"SVM": 1 if _SVC_BACKEND == "cuml" else -1}
-# verbose=2 on GPU path streams every fit so progress is visible in the log
-per_model_verbose = {"SVM": 2 if _SVC_BACKEND == "cuml" else 0}
+# verbose=3 on GPU path: shows fold number (1/5, 2/5 ...) + params + time per fit
+# verbose=2 shows params+time but omits the fold number
+per_model_verbose = {"SVM": 3 if _SVC_BACKEND == "cuml" else 0}
 
 gs_results = []
 
@@ -375,9 +376,12 @@ for name, config in param_grids.items():
     y_pred_gs = best_est.predict(X_test)
     predict_time = time.time() - t0
 
+    # SVM always uses decision_function: cuML SVC exposes predict_proba as a
+    # method (so hasattr returns True) but raises at call time unless the model
+    # was fitted with probability=True.  decision_function is always available.
     y_score_gs = (
         best_est.predict_proba(X_test)[:, 1]
-        if hasattr(best_est, "predict_proba")
+        if name != "SVM" and hasattr(best_est, "predict_proba")
         else best_est.decision_function(X_test)
     )
 

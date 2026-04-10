@@ -1,0 +1,46 @@
+# =============================================================================
+# requirements-dgx.txt — DGX Spark GPU environment (aarch64 / Blackwell)
+# =============================================================================
+# RAPIDS (cuml, cupy, cudf) CANNOT be installed via pip on aarch64.
+# The full environment must be created with mamba first:
+#
+#   mamba create -n bank-svm -c rapidsai -c conda-forge -c nvidia \
+#       rapids=25.02 python=3.11 'cuda-version=12.8' \
+#       'scikit-learn=1.5' imbalanced-learn jupyterlab \
+#       pandas numpy matplotlib seaborn papermill
+#
+#   conda activate bank-svm
+#
+# After activating the conda env, this file can be used to install any
+# supplementary pip-only packages:
+#
+#   pip install -r requirements-dgx.txt
+#
+# See docs/dgx-spark-insructions.md for the full setup walkthrough.
+# =============================================================================
+
+# --- RAPIDS (conda only — listed here for documentation purposes) ---
+# cuml==25.02.*              # GPU-accelerated SVC, installed via mamba above
+# cupy-cuda12x==13.*         # CUDA array library, installed via mamba above
+
+# --- Machine learning ---
+# scikit-learn is pinned to 1.5.x in the mamba create command above.
+# Reason: sklearn 1.6 introduced __sklearn_tags__() which cuML's base class
+# has not yet implemented, causing an AttributeError inside sklearn Pipeline
+# when predict() calls check_is_fitted() on a cuML estimator.
+# If the conda env already has the wrong version, fix with:
+#   mamba install -n bank-svm "scikit-learn=1.5"
+scikit-learn>=1.5,<1.6
+
+# SMOTE support (notebook 04)
+imbalanced-learn>=0.11
+
+# --- Jupyter ---
+jupyterlab>=4.0
+ipykernel>=6.0
+
+# --- Notebook execution ---
+papermill>=2.4
+
+# --- Dataset download ---
+certifi>=2024.0
