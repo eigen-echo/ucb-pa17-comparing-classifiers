@@ -88,7 +88,7 @@ Run the notebooks **in order** (00 → 04). The EDA notebook (00) is standalone;
 
 ## Findings
 
-See **[docs/findings.md](docs/findings.md)** for a detailed summary of results, key observations, and actionable insights across all notebooks.
+See **[docs/findings.md](docs/findings.md)** for a detailed summary of results, key observations first. Then review  **[docs/dgx-findings.md](docs/dgx-findings.md)** for observations from the GPU hardware experiments (more below)
 
 ---
 
