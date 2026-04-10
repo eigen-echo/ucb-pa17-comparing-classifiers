@@ -1,5 +1,5 @@
 # =============================================================================
-# requirements-dgx.txt — DGX Spark GPU environment (aarch64 / Blackwell)
+# requirements-dgx.txt - DGX Spark GPU environment (aarch64 / Blackwell)
 # =============================================================================
 # RAPIDS (cuml, cupy, cudf) CANNOT be installed via pip on aarch64.
 # The full environment must be created with mamba first:
@@ -19,7 +19,7 @@
 # See docs/dgx-spark-insructions.md for the full setup walkthrough.
 # =============================================================================
 
-# --- RAPIDS (conda only — listed here for documentation purposes) ---
+# --- RAPIDS (conda only - listed here for documentation purposes) ---
 # cuml==25.02.*              # GPU-accelerated SVC, installed via mamba above
 # cupy-cuda12x==13.*         # CUDA array library, installed via mamba above
 

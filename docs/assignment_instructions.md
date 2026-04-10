@@ -44,11 +44,11 @@ This is the richer of the two formats. It adds five macroeconomic context indica
 | 13 | `pdays` | numeric | Number of days since the client was last contacted in a *previous* campaign. `999` means the client was never previously contacted. |
 | 14 | `previous` | numeric | Number of times the client was contacted before this campaign. |
 | 15 | `poutcome` | categorical | Outcome of the previous marketing campaign for this client: `success`, `failure`, `nonexistent`. |
-| 16 | `emp.var.rate` | numeric | Employment variation rate — a quarterly economic indicator reflecting changes in employment levels. Negative values indicate job losses; positive values indicate growth. |
-| 17 | `cons.price.idx` | numeric | Consumer Price Index (CPI) — a monthly indicator of inflation based on the price of a basket of consumer goods. Higher values indicate higher inflation. |
-| 18 | `cons.conf.idx` | numeric | Consumer Confidence Index — a monthly survey-based indicator of how optimistic consumers feel about the economy. More negative values reflect lower confidence. |
-| 19 | `euribor3m` | numeric | Euribor 3-month rate — the daily interest rate at which European banks lend to each other for 3-month terms. A proxy for the prevailing interest rate environment. |
-| 20 | `nr.employed` | numeric | Number of employees in the economy (in thousands) — a quarterly indicator of overall labor market size. |
+| 16 | `emp.var.rate` | numeric | Employment variation rate - a quarterly economic indicator reflecting changes in employment levels. Negative values indicate job losses; positive values indicate growth. |
+| 17 | `cons.price.idx` | numeric | Consumer Price Index (CPI) - a monthly indicator of inflation based on the price of a basket of consumer goods. Higher values indicate higher inflation. |
+| 18 | `cons.conf.idx` | numeric | Consumer Confidence Index - a monthly survey-based indicator of how optimistic consumers feel about the economy. More negative values reflect lower confidence. |
+| 19 | `euribor3m` | numeric | Euribor 3-month rate - the daily interest rate at which European banks lend to each other for 3-month terms. A proxy for the prevailing interest rate environment. |
+| 20 | `nr.employed` | numeric | Number of employees in the economy (in thousands) - a quarterly indicator of overall labor market size. |
 | 21 | `y` | **target** | Whether the client subscribed to a term deposit: `yes` or `no`. This is the outcome variable you are trying to predict. |
 
 > **Macroeconomic columns (16–20)** are the key additions in this format. They capture the broader economic climate at the time of each call, providing context that individual client attributes alone cannot capture.

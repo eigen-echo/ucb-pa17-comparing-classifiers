@@ -6,7 +6,7 @@ For the generic Windows / CPU environment, see `requirements.txt` in the repo ro
 
 ---
 
-## Step 1 — Verify GPU and CUDA driver
+## Step 1 - Verify GPU and CUDA driver
 
 ```bash
 nvidia-smi
@@ -22,7 +22,7 @@ uname -m    # should print: aarch64
 
 ---
 
-## Step 2 — Check if RAPIDS is already installed
+## Step 2 - Check if RAPIDS is already installed
 
 Activate any existing Python environment and run:
 
@@ -40,11 +40,11 @@ pip show cuml-cu12
 - Version number printed → RAPIDS is installed. Skip to [Step 5](#step-5--verify-the-installation-end-to-end).
 - `ModuleNotFoundError` → proceed to Step 3.
 
-> **Note:** This project uses miniforge. The `conda list` and `mamba` commands work identically to standard conda — miniforge is fully compatible with the same CLI.
+> **Note:** This project uses miniforge. The `conda list` and `mamba` commands work identically to standard conda - miniforge is fully compatible with the same CLI.
 
 ---
 
-## Step 3 — Check for a pre-built RAPIDS container (fastest path)
+## Step 3 - Check for a pre-built RAPIDS container (fastest path)
 
 NVIDIA ships RAPIDS containers validated for DGX Spark hardware. Check if one is already available locally:
 
@@ -60,15 +60,15 @@ Using the container avoids build and compatibility issues entirely. If your note
 
 ---
 
-## Step 4 — Set up the miniforge environment
+## Step 4 - Set up the miniforge environment
 
 If no container is available, follow these steps in order to create and fully configure the `bank-svm` environment.
 
-> **Why a dedicated environment?** Without one, a system-wide `pip install --upgrade scikit-learn` — or any package that pulls in a newer sklearn as a dependency — silently breaks cuML compatibility for every project on the machine at once with no easy rollback. A named conda env scopes all changes to this project only. See the [Troubleshooting & notes](#troubleshooting--notes) section for a concrete example.
+> **Why a dedicated environment?** Without one, a system-wide `pip install --upgrade scikit-learn` - or any package that pulls in a newer sklearn as a dependency - silently breaks cuML compatibility for every project on the machine at once with no easy rollback. A named conda env scopes all changes to this project only. See the [Troubleshooting & notes](#troubleshooting--notes) section for a concrete example.
 
-### 4a — Create the conda environment (RAPIDS via mamba)
+### 4a - Create the conda environment (RAPIDS via mamba)
 
-RAPIDS (`cuml`, `cupy`, `cudf`) cannot be installed via pip on aarch64 — they must come from the RAPIDS conda channel. The command below installs RAPIDS and all core dependencies in one step. All pinned versions are documented in `requirements-dgx.txt` at the repo root.
+RAPIDS (`cuml`, `cupy`, `cudf`) cannot be installed via pip on aarch64 - they must come from the RAPIDS conda channel. The command below installs RAPIDS and all core dependencies in one step. All pinned versions are documented in `requirements-dgx.txt` at the repo root.
 
 ```bash
 mamba create -n bank-svm -c rapidsai -c conda-forge -c nvidia \
@@ -77,11 +77,11 @@ mamba create -n bank-svm -c rapidsai -c conda-forge -c nvidia \
     pandas numpy matplotlib seaborn papermill
 ```
 
-> **CUDA version note:** `nvidia-smi` on the DGX Spark shows CUDA 13.0, but stable RAPIDS releases currently top out at CUDA 12.8. CUDA drivers are backward compatible, so pinning `cuda-version=12.8` works correctly on a 13.0 driver. Before running, check the [RAPIDS install selector](https://docs.rapids.ai/install) (**conda → Stable → aarch64**) — if CUDA 13.0 appears in the dropdown, use that instead.
+> **CUDA version note:** `nvidia-smi` on the DGX Spark shows CUDA 13.0, but stable RAPIDS releases currently top out at CUDA 12.8. CUDA drivers are backward compatible, so pinning `cuda-version=12.8` works correctly on a 13.0 driver. Before running, check the [RAPIDS install selector](https://docs.rapids.ai/install) (**conda → Stable → aarch64**) - if CUDA 13.0 appears in the dropdown, use that instead.
 
-> **scikit-learn version note:** `scikit-learn` is pinned to `1.5` above. sklearn 1.6 introduced `__sklearn_tags__()` which cuML's base class has not yet implemented — using 1.6+ causes an `AttributeError` when sklearn's `Pipeline` calls `check_is_fitted` on a cuML estimator.
+> **scikit-learn version note:** `scikit-learn` is pinned to `1.5` above. sklearn 1.6 introduced `__sklearn_tags__()` which cuML's base class has not yet implemented - using 1.6+ causes an `AttributeError` when sklearn's `Pipeline` calls `check_is_fitted` on a cuML estimator.
 
-### 4b — Activate the environment
+### 4b - Activate the environment
 
 ```bash
 conda activate bank-svm
@@ -89,7 +89,7 @@ conda activate bank-svm
 
 Always activate this environment before running any training commands. Every command from this point onwards assumes it is active.
 
-### 4c — Install supplementary pip packages
+### 4c - Install supplementary pip packages
 
 With the environment active, install any remaining pip-only packages using `requirements-dgx.txt`:
 
@@ -97,9 +97,9 @@ With the environment active, install any remaining pip-only packages using `requ
 pip install -r requirements-dgx.txt
 ```
 
-This is a lightweight step — most packages were already pulled in by the `mamba create` command. The file is kept in the repo so the full dependency picture is version-controlled and reproducible.
+This is a lightweight step - most packages were already pulled in by the `mamba create` command. The file is kept in the repo so the full dependency picture is version-controlled and reproducible.
 
-### 4d — Register the environment as a Jupyter kernel
+### 4d - Register the environment as a Jupyter kernel
 
 Required only if you plan to use papermill or open the notebooks in Jupyter:
 
@@ -117,7 +117,7 @@ jupyter kernelspec list
 
 ---
 
-## Step 5 — Verify the installation end-to-end
+## Step 5 - Verify the installation end-to-end
 
 With `bank-svm` active, run this in the Python REPL or a notebook cell:
 
@@ -154,13 +154,13 @@ Compute capability   : 12.1
 SVC smoke test       : OK
 ```
 
-> **GPU count = 1 is correct.** The GB10 is a single GPU die with 48 internal Streaming Multiprocessors (6,144 CUDA cores). cuML dispatches CUDA kernels across all 48 SMs automatically inside each fit — no multi-device configuration is needed.
+> **GPU count = 1 is correct.** The GB10 is a single GPU die with 48 internal Streaming Multiprocessors (6,144 CUDA cores). cuML dispatches CUDA kernels across all 48 SMs automatically inside each fit - no multi-device configuration is needed.
 
 If `SVC smoke test` throws a CUDA kernel error, your RAPIDS build may not include `sm_121` support. Check for a newer RAPIDS release or nightly build at [https://docs.rapids.ai/install](https://docs.rapids.ai/install).
 
 ---
 
-## Step 6 — Download the dataset
+## Step 6 - Download the dataset
 
 From the repo root with `bank-svm` active:
 
@@ -172,7 +172,7 @@ This downloads and extracts all four dataset variants into the `data/` folder. I
 
 ---
 
-## Step 7 — Confirm the GPU backend is active
+## Step 7 - Confirm the GPU backend is active
 
 The first cell of notebooks 02 and 03 (and the top of `src/train_additional_full.py`) prints which backend was loaded:
 
@@ -181,17 +181,17 @@ SVC backend: cuml     ← GPU path (DGX Spark)
 SVC backend: sklearn  ← CPU fallback (laptop / bank-svm env not active)
 ```
 
-If you see `sklearn` on the DGX Spark, the `bank-svm` environment is not active or cuML was not installed correctly — re-check Steps 2–4.
+If you see `sklearn` on the DGX Spark, the `bank-svm` environment is not active or cuML was not installed correctly - re-check Steps 2–4.
 
 ---
 
-## Step 8 — Run the training
+## Step 8 - Run the training
 
 There are two ways to run training from the command line. Choose whichever fits your workflow.
 
-### Option A — Python script (recommended for headless runs)
+### Option A - Python script (recommended for headless runs)
 
-A standalone script `src/train_additional_full.py` mirrors notebook 02 exactly. It uses Python's `logging` module to stream timestamped output to both the terminal and a log file, and saves all plots as PNGs — no display or Jupyter kernel required.
+A standalone script `src/train_additional_full.py` mirrors notebook 02 exactly. It uses Python's `logging` module to stream timestamped output to both the terminal and a log file, and saves all plots as PNGs - no display or Jupyter kernel required.
 
 ```bash
 conda activate bank-svm
@@ -238,9 +238,9 @@ What the live output looks like:
 
 ---
 
-### Option B — Notebook via papermill
+### Option B - Notebook via papermill
 
-Executes the notebook in place and streams each cell's output live — useful when you want the `.ipynb` output cells populated for later review in Jupyter.
+Executes the notebook in place and streams each cell's output live - useful when you want the `.ipynb` output cells populated for later review in Jupyter.
 
 ```bash
 conda activate bank-svm
@@ -334,14 +334,14 @@ The `mamba create` command in Step 4a and the `requirements-dgx.txt` file both a
 
 ### Why you should always use a virtual environment
 
-The bug above is a concrete example of why isolated environments matter. Without one, a system-wide `pip install --upgrade scikit-learn` — or any package that pulls in a newer sklearn as a transitive dependency — silently breaks cuML compatibility for every project on the machine at once, with no easy way to roll back.
+The bug above is a concrete example of why isolated environments matter. Without one, a system-wide `pip install --upgrade scikit-learn` - or any package that pulls in a newer sklearn as a transitive dependency - silently breaks cuML compatibility for every project on the machine at once, with no easy way to roll back.
 
 With a named conda environment (`bank-svm`), the fix is one command scoped only to this project, and every other environment on the machine is unaffected.
 
 | Problem | Without env | With env |
 |---|---|---|
 | Package A needs sklearn 1.5, Package B needs 1.6 | One of them breaks | Each gets its own version |
-| Upgrading a system package breaks your project | Hard to diagnose, hard to undo | Isolated — system changes don't affect it |
+| Upgrading a system package breaks your project | Hard to diagnose, hard to undo | Isolated - system changes don't affect it |
 | Reproducing results on another machine | "Works on my machine" | `mamba env export` captures exact versions |
 | Sharing the project with a colleague | Manual dependency hunting | Activate env, run script |
 

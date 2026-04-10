@@ -1,4 +1,4 @@
-# Findings Summary — Comparing Classifiers
+# Findings Summary - Comparing Classifiers
 
 UC Berkeley Professional Certificate in ML/AI · Practical Application 17
 
@@ -6,13 +6,13 @@ This document summarises the key findings across all five notebooks. Results are
 
 ---
 
-## 00 — Exploratory Data Analysis
+## 00 - Exploratory Data Analysis
 
 **Dataset:** `bank-full.csv` (~45,000 rows, 15 features)
 
 ### Class Imbalance
 
-The target variable `y` (term deposit subscription) is heavily skewed: approximately **88.5% of clients said *no***, leaving only ~11.5% positive cases. This means a basic classifier that always predicts "no" achieves ~88.5% accuracy without learning anything useful. **Accuracy alone is therefore a misleading metric** — precision, recall, and ROC-AUC are more informative.
+The target variable `y` (term deposit subscription) is heavily skewed: approximately **88.5% of clients said *no***, leaving only ~11.5% positive cases. This means a basic classifier that always predicts "no" achieves ~88.5% accuracy without learning anything useful. **Accuracy alone is therefore a misleading metric** - precision, recall, and ROC-AUC are more informative.
 
 ![Class distribution bar chart (`y` = yes/no counts and proportions)](../images/00-class-imbalance.png)
 
@@ -22,13 +22,13 @@ The target variable `y` (term deposit subscription) is heavily skewed: approxima
 - **Age & Occupation:** Subscription rates are notably higher among retired clients and students. Rates tick up after age 60. No strong pattern emerged from marital status alone.
 - **Education:** Some signal exists but the ordering is non-linear, suggesting an ordinal or nominal encoding strategy is worth exploring.
 - **Contact Method:** Cellular contact outperforms telephone outreach in conversion rate.
-- **Month / Day:** Conversion rates are elevated in Q4 (September–December, except November) and in March — likely reflecting local tax-cycle behaviour. The November dip may be a sandwich effect between two high-conversion months.
+- **Month / Day:** Conversion rates are elevated in Q4 (September–December, except November) and in March - likely reflecting local tax-cycle behaviour. The November dip may be a sandwich effect between two high-conversion months.
 
 ![](../images/00-exploring-features.png)
 
 ### Campaign Contact Patterns
 
-- Clients contacted fewer times convert at higher rates — repeated calls have diminishing (and eventually negative) returns.
+- Clients contacted fewer times convert at higher rates - repeated calls have diminishing (and eventually negative) returns.
 - Clients successfully contacted in a *prior* campaign (`poutcome = success`) have substantially higher conversion odds.
 - Call `duration` is a strong predictor but is only known *after* the call ends, so it is excluded from all models to avoid data leakage.
 
@@ -36,7 +36,7 @@ The target variable `y` (term deposit subscription) is heavily skewed: approxima
 
 ---
 
-## 01 — Model Training: Small Dataset (Baseline)
+## 01 - Model Training: Small Dataset (Baseline)
 
 **Dataset:** `bank.csv` (~4,500 rows, 15 features, no SMOTE)
 
@@ -59,15 +59,15 @@ All four models beat the naive 88.5% accuracy baseline, but **raw accuracy is no
 
 > Naive majority-class dummy: Accuracy 0.8895, ROC-AUC 0.5000, Recall (yes) 0.00
 
-![GridSearchCV comparison bar chart — Test Accuracy, Test ROC-AUC, and GridSearch time by model](../images/01-grid-search-comparison-bank-sampled.png)
+![GridSearchCV comparison bar chart - Test Accuracy, Test ROC-AUC, and GridSearch time by model](../images/01-grid-search-comparison-bank-sampled.png)
 
 ### Key Observations
 
-- **Logistic Regression** is the strongest performer on ROC-AUC (0.6966) and trains in under 0.2s — the most practical choice at this scale.
+- **Logistic Regression** is the strongest performer on ROC-AUC (0.6966) and trains in under 0.2s - the most practical choice at this scale.
 - **Decision Tree** has the highest raw accuracy (0.8948) post-tuning (best params: `max_depth=5`, `min_samples_split=10`) but lags on ROC-AUC (0.6430), confirming it learns a conservative, mostly-"no" rule.
 - **KNN** (best params: `n_neighbors=21`, `metric=euclidean`) is competitive but slower and shows weaker minority-class recall (0.11).
 - **SVM** (best params: `C=0.1`, `kernel=poly`) takes ~30× longer than LR for marginal accuracy gain and lower ROC-AUC.
-- All models struggle to recall the minority "yes" class without resampling — even the best (DT at 0.23) misses roughly three-quarters of subscribers.
+- All models struggle to recall the minority "yes" class without resampling - even the best (DT at 0.23) misses roughly three-quarters of subscribers.
 
 ### Logistic Regression Coefficients
 
@@ -80,7 +80,7 @@ The coefficient plot reveals which features push the model toward predicting a s
 
 ---
 
-## 02 — Model Training: Additional Full Dataset (20 Features)
+## 02 - Model Training: Additional Full Dataset (20 Features)
 
 **Dataset:** `bank-additional-full.csv` (~41,000 rows, 20 features including macroeconomic indicators)
 
@@ -105,7 +105,7 @@ These macro indicators capture the economic climate at the time of each call and
 | Logistic Regression | 0.9000 | 0.7806 | 5.34s | Best ROC-AUC; macro features add clear lift |
 | KNN | 0.8972 | 0.7535 | 18.22s | Competitive but slow to predict (0.91s/call) |
 | Decision Tree | 0.9009 | 0.7721 | 2.87s | Best accuracy; `max_depth=5`, `entropy` criterion |
-| SVM | 0.4299 | 0.6606 | 65.04s | Did not converge — accuracy meaningless |
+| SVM | 0.4299 | 0.6606 | 65.04s | Did not converge - accuracy meaningless |
 
 > Naive majority-class dummy: Accuracy 0.8880, ROC-AUC 0.5000
 
@@ -115,29 +115,29 @@ These macro indicators capture the economic climate at the time of each call and
 
 - Adding the five macroeconomic features produces a **meaningful ROC-AUC improvement** across all three well-behaved models (+0.05–0.08 vs notebook 01 GS results).
 - **Decision Tree** is the accuracy leader here (0.9009) with best params `entropy`, `max_depth=5`, `min_samples_split=20`.
-- **KNN** prediction time balloons to 0.91s on ~10k test rows — a practical concern for any real-time scoring system.
-- **SVM** with `max_iter` cap results in a degenerate model (Test Accuracy 0.4299) — the cap prevents convergence and the results are not reliable. GridSearch selected `C=0.001`, `kernel=sigmoid`, itself a sign the optimiser is flailing.
+- **KNN** prediction time balloons to 0.91s on ~10k test rows - a practical concern for any real-time scoring system.
+- **SVM** with `max_iter` cap results in a degenerate model (Test Accuracy 0.4299) - the cap prevents convergence and the results are not reliable. GridSearch selected `C=0.001`, `kernel=sigmoid`, itself a sign the optimiser is flailing.
 
 ### SVM Caveat
 
-SVM is run with `kernel='sigmoid'` and `max_iter=2000` as a computational compromise. This is **not a fully tuned SVM** — it converges quickly but may not represent SVM's true ceiling. See the README for more context on the hardware constraint.
+SVM is run with `kernel='sigmoid'` and `max_iter=2000` as a computational compromise. This is **not a fully tuned SVM** - it converges quickly but may not represent SVM's true ceiling. See the README for more context on the hardware constraint.
 
 ---
 
-## 03 — Model Training: Full Dataset (15 Features)
+## 03 - Model Training: Full Dataset (15 Features)
 
 **Dataset:** `bank-full.csv` (~45,000 rows, 15 features)
 
 ### Purpose
 
-This notebook uses the same 15-feature schema as notebook 01 but with **10× more training data**, making it a clean controlled comparison: same features, same pipeline, same GridSearchCV setup — just more data.
+This notebook uses the same 15-feature schema as notebook 01 but with **10× more training data**, making it a clean controlled comparison: same features, same pipeline, same GridSearchCV setup - just more data.
 
 ### Key Observations
 
-- **Logistic Regression** scales well — training time increases modestly and ROC-AUC improves from 0.6966 (small) to 0.7615 (full).
+- **Logistic Regression** scales well - training time increases modestly and ROC-AUC improves from 0.6966 (small) to 0.7615 (full).
 - **KNN** becomes noticeably slower at prediction time (1.25s vs 0.02s); its ROC-AUC also improves but lags LR.
 - **Decision Tree** benefits from more data (`max_depth=10` selected vs `5` on the small set) but its ROC-AUC gain is smaller than LR's.
-- **SVM** with `max_iter=2000` again produces a degenerate result (Test Accuracy 0.12, ROC-AUC 0.56) — the model failed to converge.
+- **SVM** with `max_iter=2000` again produces a degenerate result (Test Accuracy 0.12, ROC-AUC 0.56) - the model failed to converge.
 
 ### Results Summary (GridSearchCV best estimators)
 
@@ -146,15 +146,15 @@ This notebook uses the same 15-feature schema as notebook 01 but with **10× mor
 | Logistic Regression | 0.8907 | 0.7615 | 4.77s | Best ROC-AUC; consistent improvement vs small dataset |
 | KNN | 0.8891 | 0.7558 | 19.84s | Strong ROC-AUC but prediction latency is high |
 | Decision Tree | 0.8875 | 0.7415 | 3.32s | Solid; best params `entropy`, `max_depth=10` |
-| SVM | 0.1197 | 0.5611 | 70.94s | Did not converge — results not meaningful |
+| SVM | 0.1197 | 0.5611 | 70.94s | Did not converge - results not meaningful |
 
 > Naive majority-class dummy: Accuracy 0.8803, ROC-AUC 0.5000
 
-![Horizontal bar charts — Test Accuracy, Test ROC-AUC, GridSearch time by model](../images/03-grid-search-comparison-bank-full.png)
+![Horizontal bar charts - Test Accuracy, Test ROC-AUC, GridSearch time by model](../images/03-grid-search-comparison-bank-full.png)
 
 ---
 
-## 04 — SMOTE: Addressing Class Imbalance
+## 04 - SMOTE: Addressing Class Imbalance
 
 **Training dataset:** `bank.csv` (~4,500 rows) | **Generalization test:** `bank-full.csv` (~45,000 rows)
 
@@ -162,11 +162,11 @@ This notebook uses the same 15-feature schema as notebook 01 but with **10× mor
 
 ### The Problem SMOTE Solves
 
-With a ~7.6:1 class imbalance in the training set (2,994 "no" vs 396 "yes"), classifiers without resampling are biased toward predicting "no". They achieve high accuracy by mostly ignoring the minority class — but the whole business value is in identifying the "yes" subscribers *before* the call.
+With a ~7.6:1 class imbalance in the training set (2,994 "no" vs 396 "yes"), classifiers without resampling are biased toward predicting "no". They achieve high accuracy by mostly ignoring the minority class - but the whole business value is in identifying the "yes" subscribers *before* the call.
 
-**SMOTE** (Synthetic Minority Oversampling Technique) synthesises new minority examples in feature space to rebalance the training distribution, improving minority-class recall without simply duplicating records. After SMOTE: 2,994 "no" and 2,994 "yes" — a perfect 1:1 ratio.
+**SMOTE** (Synthetic Minority Oversampling Technique) synthesises new minority examples in feature space to rebalance the training distribution, improving minority-class recall without simply duplicating records. After SMOTE: 2,994 "no" and 2,994 "yes" - a perfect 1:1 ratio.
 
-![Side-by-side bar charts — class distribution before and after SMOTE](../images/04-class-imbalance-before-and-after-smote.png)
+![Side-by-side bar charts - class distribution before and after SMOTE](../images/04-class-imbalance-before-and-after-smote.png)
 
 ### Baseline vs SMOTE Comparison (GridSearchCV)
 
@@ -177,19 +177,19 @@ With a ~7.6:1 class imbalance in the training set (2,994 "no" vs 396 "yes"), cla
 | Decision Tree | 0.6767 | 0.6539 | 0.18 | 0.28 | +0.10 |
 | SVM | 0.6849 | 0.7221 | 0.00 | 0.57 | **+0.57** |
 
-![Grouped bar charts — Baseline vs SMOTE across CV ROC-AUC, Test ROC-AUC, and Recall (yes)](../images/04-baseline-vs-smote-bank-sampled-smote.png)
+![Grouped bar charts - Baseline vs SMOTE across CV ROC-AUC, Test ROC-AUC, and Recall (yes)](../images/04-baseline-vs-smote-bank-sampled-smote.png)
 
 ### Key Observations
 
-- SMOTE delivers **dramatic minority-class recall improvements** across LR (+0.53), KNN (+0.63), and SVM (+0.57) — the bank catches far more potential subscribers.
+- SMOTE delivers **dramatic minority-class recall improvements** across LR (+0.53), KNN (+0.63), and SVM (+0.57) - the bank catches far more potential subscribers.
 - This comes at a cost: raw accuracy drops sharply (e.g. LR from 0.8939 → 0.6676) because the model now predicts "yes" more aggressively, generating more false positives. Whether this tradeoff is worth it depends on the relative cost of a missed subscriber vs a wasted call.
-- **ROC-AUC under SMOTE is broadly maintained or slightly improved** — notably SVM gains +0.04 in CV ROC-AUC, confirming the ranking ability is preserved even as the decision threshold shifts.
-- **Decision Tree** responds least to SMOTE (+0.10 recall lift) — tree splits are less sensitive to synthetic oversampling because they operate on hard class boundaries.
+- **ROC-AUC under SMOTE is broadly maintained or slightly improved** - notably SVM gains +0.04 in CV ROC-AUC, confirming the ranking ability is preserved even as the decision threshold shifts.
+- **Decision Tree** responds least to SMOTE (+0.10 recall lift) - tree splits are less sensitive to synthetic oversampling because they operate on hard class boundaries.
 - SMOTE is applied **only within each training fold** (via `ImbPipeline`) to avoid data leakage into validation folds.
 
 ### Logistic Regression Coefficients (SMOTE-trained)
 
-The coefficient plot for the SMOTE-trained LR model follows a similar pattern to the baseline, but with re-weighted magnitudes — prior campaign outcome and economic indicators remain dominant.  
+The coefficient plot for the SMOTE-trained LR model follows a similar pattern to the baseline, but with re-weighted magnitudes - prior campaign outcome and economic indicators remain dominant.  
 
 ### Generalization Test on `bank-full.csv`
 
@@ -206,7 +206,7 @@ The models trained on ~4,500 rows were scored against the full 45,211-row datase
 | SVM | Baseline | 0.8837 | 0.7100 | 0.01 | 0.02 |
 | SVM | SMOTE | 0.7071 | 0.7365 | 0.64 | 0.34 |
 
-> The SMOTE models generalise well on recall — patterns learned from the synthetic-balanced small dataset transfer to the real class distribution at scale. ROC-AUC remains close between baseline and SMOTE variants, confirming the resampling improves class-boundary placement without degrading the model's overall discriminative power.
+> The SMOTE models generalise well on recall - patterns learned from the synthetic-balanced small dataset transfer to the real class distribution at scale. ROC-AUC remains close between baseline and SMOTE variants, confirming the resampling improves class-boundary placement without degrading the model's overall discriminative power.
 
 ![Baseline vs SMOTE ROC-AUC curve across all models](../images/04-smote-roc-curve.png)
 
@@ -215,11 +215,11 @@ The models trained on ~4,500 rows were scored against the full 45,211-row datase
 ## Overall Takeaways
 
 1. **Accuracy is misleading** for imbalanced classification. Always check ROC-AUC and minority-class recall alongside it.
-2. **Logistic Regression is the best all-around model** — fast to train (<0.2s), interpretable, and consistently leads on ROC-AUC across all dataset sizes (0.70 on small, 0.76–0.78 on full datasets).
-3. **Macroeconomic features matter.** Adding the five macro indicators in the 20-feature dataset raises ROC-AUC by ~0.05–0.08 across models. `euribor3m` in particular is a dominant negative predictor — clients are less likely to subscribe when interest rates are high.
-4. **Previous campaign outcome** (`poutcome_success`) is the single strongest positive signal — a prior success dramatically increases conversion odds.
+2. **Logistic Regression is the best all-around model** - fast to train (<0.2s), interpretable, and consistently leads on ROC-AUC across all dataset sizes (0.70 on small, 0.76–0.78 on full datasets).
+3. **Macroeconomic features matter.** Adding the five macro indicators in the 20-feature dataset raises ROC-AUC by ~0.05–0.08 across models. `euribor3m` in particular is a dominant negative predictor - clients are less likely to subscribe when interest rates are high.
+4. **Previous campaign outcome** (`poutcome_success`) is the single strongest positive signal - a prior success dramatically increases conversion odds.
 5. **SMOTE is valuable** when the cost of missing a subscriber (false negative) outweighs the cost of a wasted call (false positive). KNN and SVM SMOTE variants push minority-class recall above 0.60–0.70 while maintaining ROC-AUC, which is a useful operating point for the bank.
-6. **SVM is impractical at scale** without cloud compute — it is the clear computational outlier (65–70s GridSearch vs <5s for LR and DT) and failed to converge entirely on the full datasets with an iteration cap.
+6. **SVM is impractical at scale** without cloud compute - it is the clear computational outlier (65–70s GridSearch vs <5s for LR and DT) and failed to converge entirely on the full datasets with an iteration cap.
 7. **More data helps LR and DT most.** KNN's prediction latency grows with dataset size (1.25s at 45k rows), making it less practical for real-time scoring despite competitive ROC-AUC.
 
 ---
@@ -244,14 +244,14 @@ The numbers throughout this document are useful for evaluating models, but the q
 
 **The single strongest signal is whether someone said yes to a previous campaign.** These clients convert at roughly 6 times the average rate and should be first in the queue for any new campaign.
 
-Clients with no existing debt (no housing or personal loan) convert at roughly 1.6× the average — existing financial commitments appear to reduce appetite for a new product, which is intuitive.
+Clients with no existing debt (no housing or personal loan) convert at roughly 1.6× the average - existing financial commitments appear to reduce appetite for a new product, which is intuitive.
 
 ---
 
 ### When Should You Call?
 
 - **Best months:** March and the final quarter of the year (September, October, December) show consistently higher conversion rates, likely reflecting tax-season and year-end financial planning behaviour. Hire seasonal workers if needed during these months. 
-- **Avoid November:** conversion drops noticeably — squeezed between the October and December peaks, likely related to year end tax filing (from preliminary web search and analysis) but a deeper customer interview will help validate the seasonal influx
+- **Avoid November:** conversion drops noticeably - squeezed between the October and December peaks, likely related to year end tax filing (from preliminary web search and analysis) but a deeper customer interview will help validate the seasonal influx
 - **Stop after the 4th or 5th contact.** Conversion rate falls sharply beyond this point. Additional calls are largely wasted effort and risk souring the relationship.
 
 ---
@@ -265,14 +265,14 @@ Clients with no existing debt (no housing or personal loan) convert at roughly 1
 
 ### What Does the Classifier Add?
 
-The observations above are useful heuristics, but they only look at one factor at a time. A trained classifier combines *all* of these signals simultaneously — age, job, previous campaign outcome, contact method, timing, and economic conditions — to produce a single ranked probability score for each client.
+The observations above are useful heuristics, but they only look at one factor at a time. A trained classifier combines *all* of these signals simultaneously - age, job, previous campaign outcome, contact method, timing, and economic conditions - to produce a single ranked probability score for each client.
 
 In practice this means the bank could:
 - **Score its full client list** before each campaign and call only the top-ranked prospects
 - **Reduce total call volume by 30–50%** while maintaining or improving the number of successful subscriptions
 - **Shift agent time** away from unlikely conversions toward clients who genuinely need one more conversation to commit
 
-The Logistic Regression model achieves this reliably, trains in seconds, and outputs a calibrated probability — making it the most practical starting point for putting this analysis to work.
+The Logistic Regression model achieves this reliably, trains in seconds, and outputs a calibrated probability - making it the most practical starting point for putting this analysis to work.
 
 ---
 
@@ -289,13 +289,13 @@ The Logistic Regression model achieves this reliably, trains in seconds, and out
 ### Short-Term (next campaign cycle)
 
 4. **Segment the campaign into three tiers:**
-   - *Tier 1 — High priority:* Prior campaign successes + model score in top quartile. Call first, call once.
-   - *Tier 2 — Standard:* Model score in middle two quartiles. Normal campaign cadence.
-   - *Tier 3 — Suppress:* Bottom quartile. Skip or use lower-cost channels (email, SMS).
+   - *Tier 1 - High priority:* Prior campaign successes + model score in top quartile. Call first, call once.
+   - *Tier 2 - Standard:* Model score in middle two quartiles. Normal campaign cadence.
+   - *Tier 3 - Suppress:* Bottom quartile. Skip or use lower-cost channels (email, SMS).
 
 5. **Time campaigns to March or Q4 (Sep–Dec, excluding November).** The seasonal signal is consistent across multiple years of data and appears to reflect real financial planning behaviour rather than noise.
 
-6. **Decide on the precision vs recall tradeoff explicitly.** The SMOTE results (notebook 04) show that minority-class recall can be pushed from ~13% to ~69% for Logistic Regression — at the cost of more false positives. Whether that tradeoff is worth it depends on one question the data cannot answer: *what is the cost of a wasted call vs the value of a new subscription?* That number should come from the business, not the model.
+6. **Decide on the precision vs recall tradeoff explicitly.** The SMOTE results (notebook 04) show that minority-class recall can be pushed from ~13% to ~69% for Logistic Regression - at the cost of more false positives. Whether that tradeoff is worth it depends on one question the data cannot answer: *what is the cost of a wasted call vs the value of a new subscription?* That number should come from the business, not the model.
 
 ### Longer-Term (modelling improvements)
 

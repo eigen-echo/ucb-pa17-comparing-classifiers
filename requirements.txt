@@ -1,5 +1,5 @@
 # =============================================================================
-# requirements.txt — generic CPU environment (Windows / laptop)
+# requirements.txt - generic CPU environment (Windows / laptop)
 # =============================================================================
 # Install with:
 #   pip install -r requirements.txt
