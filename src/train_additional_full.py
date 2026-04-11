@@ -10,15 +10,21 @@ Outputs:
     - Log file at outputs/02/run.log
 """
 
+import json
 import logging
 import os
+import platform
 import sys
 import time
 import warnings
+from datetime import datetime
+
+import joblib
+import sklearn
 
 warnings.filterwarnings("ignore")
 
-# Use non-interactive backend — no display required (safe for DGX Spark / headless)
+# Use non-interactive backend - no display required (safe for DGX Spark / headless)
 import matplotlib
 matplotlib.use("Agg")
 import matplotlib.pyplot as plt
@@ -27,7 +33,7 @@ import numpy as np
 import pandas as pd
 
 # ---------------------------------------------------------------------------
-# Logging setup — writes to both console and a log file
+# Logging setup - writes to both console and a log file
 # ---------------------------------------------------------------------------
 OUTPUT_DIR = os.path.join(os.path.dirname(__file__), "..", "outputs", "02")
 os.makedirs(OUTPUT_DIR, exist_ok=True)
@@ -54,7 +60,7 @@ try:
 except ImportError:
     from sklearn.svm import SVC
     _SVC_BACKEND = "sklearn"
-from sklearn.svm import LinearSVC  # noqa: F401 — kept for parity with notebook
+from sklearn.svm import LinearSVC  # noqa: F401 - kept for parity with notebook
 
 log.info("SVC backend: %s", _SVC_BACKEND)
 
@@ -133,14 +139,14 @@ log.info("Train size: %d  |  Test size: %d", len(X_train), len(X_test))
 num_cols = X_train.select_dtypes(include="number").columns.tolist()
 skf = StratifiedKFold(n_splits=5, shuffle=True, random_state=42)
 
-# Shared preprocessor — sparse_output=False required for cuML SVC (needs dense input)
+# Shared preprocessor - sparse_output=False required for cuML SVC (needs dense input)
 preprocessor = make_column_transformer(
     (StandardScaler(), num_cols),
     (OneHotEncoder(handle_unknown="ignore", sparse_output=False), cat_cols),
 )
 
 # ===========================================================================
-# 2. Dummy classifier — baseline
+# 2. Dummy classifier - baseline
 # ===========================================================================
 section("Dummy Classifier (baseline)")
 
@@ -183,7 +189,7 @@ axes[1].set_title("ROC Curve - Logistic Regression"); axes[1].legend()
 plt.tight_layout()
 save_fig("lr_confusion_roc")
 
-log.info("Logistic Regression — 5-Fold Stratified CV")
+log.info("Logistic Regression - 5-Fold Stratified CV")
 cv_accuracy = cross_val_score(lr_pipe, X, y, cv=skf, scoring="accuracy")
 cv_roc_auc  = cross_val_score(lr_pipe, X, y, cv=skf, scoring="roc_auc")
 log.info("  Accuracy : %.4f  (+/- %.4f)", cv_accuracy.mean(), cv_accuracy.std())
@@ -217,7 +223,7 @@ axes[1].set_title("ROC Curve - KNN"); axes[1].legend()
 plt.tight_layout()
 save_fig("knn_confusion_roc")
 
-log.info("KNN — 5-Fold Stratified CV")
+log.info("KNN - 5-Fold Stratified CV")
 cv_accuracy_knn = cross_val_score(knn_pipe, X, y, cv=skf, scoring="accuracy")
 cv_roc_auc_knn  = cross_val_score(knn_pipe, X, y, cv=skf, scoring="roc_auc")
 log.info("  Accuracy : %.4f  (+/- %.4f)", cv_accuracy_knn.mean(), cv_accuracy_knn.std())
@@ -251,7 +257,7 @@ axes[1].set_title("ROC Curve - Decision Tree"); axes[1].legend()
 plt.tight_layout()
 save_fig("dt_confusion_roc")
 
-log.info("Decision Tree — 5-Fold Stratified CV")
+log.info("Decision Tree - 5-Fold Stratified CV")
 cv_accuracy_dt = cross_val_score(dt_pipe, X, y, cv=skf, scoring="accuracy")
 cv_roc_auc_dt  = cross_val_score(dt_pipe, X, y, cv=skf, scoring="roc_auc")
 log.info("  Accuracy : %.4f  (+/- %.4f)", cv_accuracy_dt.mean(), cv_accuracy_dt.std())
@@ -292,16 +298,16 @@ axes[1].set_title("ROC Curve - SVM"); axes[1].legend()
 plt.tight_layout()
 save_fig("svm_confusion_roc")
 
-log.info("SVM — 5-Fold Stratified CV")
+log.info("SVM - 5-Fold Stratified CV")
 cv_accuracy_svm = cross_val_score(svm_pipe, X, y, cv=skf, scoring="accuracy")
 cv_roc_auc_svm  = cross_val_score(svm_pipe, X, y, cv=skf, scoring="roc_auc")
 log.info("  Accuracy : %.4f  (+/- %.4f)", cv_accuracy_svm.mean(), cv_accuracy_svm.std())
 log.info("  ROC-AUC  : %.4f  (+/- %.4f)", cv_roc_auc_svm.mean(), cv_roc_auc_svm.std())
 
 # ===========================================================================
-# 7. GridSearchCV — all models
+# 7. GridSearchCV - all models
 # ===========================================================================
-section("GridSearchCV — Hyperparameter Tuning (all models)")
+section("GridSearchCV - Hyperparameter Tuning (all models)")
 
 param_grids = {
     "Logistic Regression": {
@@ -337,11 +343,34 @@ param_grids = {
     },
 }
 
-# GPU estimators don't parallelize well under joblib — one worker per GPU
-per_model_n_jobs  = {"SVM": 1 if _SVC_BACKEND == "cuml" else -1}
+# ---------------------------------------------------------------------------
+# Parallelism strategy
+#
+# GPU path (cuML):
+#   Each GridSearchCV worker runs: CPU preprocessing → GPU SVC fit.
+#   The DGX Spark's 128 GB unified memory gives ample headroom for several
+#   concurrent SVM fits (each needs ~100-300 MB, not GB), and CUDA MPS
+#   schedules multiple contexts on the same GPU automatically.
+#
+#   _SVM_GPU_JOBS controls how many CV fits run in parallel for SVM:
+#     4  -- conservative; safe starting point
+#     8  -- recommended for Spark (watch `nvidia-smi` for >80% SM utilization)
+#     12 -- aggressive; only raise if GPU is still under-utilised at 8
+#
+#   LR / KNN / DT run purely on CPU -- n_jobs=-1 uses all available cores.
+#
+# CPU path (sklearn):
+#   All models use n_jobs=-1 (full CPU parallelism, no GPU to worry about).
+# ---------------------------------------------------------------------------
+_SVM_GPU_JOBS = 8   # tune: raise to 12 if `nvidia-smi` SM util stays below 80%
+
+per_model_n_jobs  = {"SVM": _SVM_GPU_JOBS if _SVC_BACKEND == "cuml" else -1}
 # verbose=3 on GPU path: shows fold number (1/5, 2/5 ...) + params + time per fit
 # verbose=2 shows params+time but omits the fold number
 per_model_verbose = {"SVM": 3 if _SVC_BACKEND == "cuml" else 0}
+
+log.info("SVM GridSearchCV n_jobs: %s",
+         _SVM_GPU_JOBS if _SVC_BACKEND == "cuml" else "-1 (all CPU cores)")
 
 gs_results = []
 
@@ -478,7 +507,7 @@ save_fig("comparison_roc_curves")
 # ===========================================================================
 # 10. Logistic Regression coefficient plot
 # ===========================================================================
-section("Logistic Regression — Coefficient Plot")
+section("Logistic Regression - Coefficient Plot")
 
 best_lr = gs_results[0]["best_estimator"]
 ohe_features = (
@@ -501,6 +530,64 @@ ax.set_title("Logistic Regression Coefficients\n(positive = increases P(yes), ne
 ax.invert_yaxis()
 plt.tight_layout()
 save_fig("lr_coefficients")
+
+# ===========================================================================
+# 11. Persist trained models
+# ===========================================================================
+section("Persisting trained models")
+
+MODELS_DIR = os.path.join(os.path.dirname(__file__), "..", "models", "02")
+os.makedirs(MODELS_DIR, exist_ok=True)
+
+# Map display names to on-disk filenames
+_model_filenames = {
+    "Logistic Regression": "logistic_regression.joblib",
+    "KNN":                 "knn.joblib",
+    "Decision Tree":       "decision_tree.joblib",
+    "SVM":                 "svm.joblib",
+}
+
+metadata = {
+    "dataset":         os.path.basename(DATA_PATH),
+    "script":          os.path.relpath(
+        __file__,
+        start=os.path.join(os.path.dirname(__file__), ".."),
+    ),
+    "timestamp":       datetime.now().isoformat(timespec="seconds"),
+    "svc_backend":     _SVC_BACKEND,
+    "sklearn_version": sklearn.__version__,
+    "python_version":  platform.python_version(),
+    "notes": (
+        "SVM was trained with the {backend} backend. "
+        "Reloading svm.joblib requires the matching library ({pkg}) "
+        "in the active environment; LR/KNN/DT reload on any scikit-learn install."
+    ).format(
+        backend=_SVC_BACKEND,
+        pkg="RAPIDS cuML" if _SVC_BACKEND == "cuml" else "scikit-learn",
+    ),
+    "models": {},
+}
+
+for r in gs_results:
+    fname = _model_filenames[r["Model"]]
+    fpath = os.path.join(MODELS_DIR, fname)
+    joblib.dump(r["best_estimator"], fpath)
+    size_kb = os.path.getsize(fpath) / 1024
+    log.info("  Saved %-20s -> %s  (%.1f KB)", r["Model"], fname, size_kb)
+
+    metadata["models"][r["Model"]] = {
+        "file":          fname,
+        "best_params":   r["Best Params"],
+        "cv_roc_auc":    r["CV ROC-AUC"],
+        "test_accuracy": r["Test Accuracy"],
+        "test_roc_auc":  r["Test ROC-AUC"],
+    }
+
+metadata_path = os.path.join(MODELS_DIR, "metadata.json")
+with open(metadata_path, "w", encoding="utf-8") as f:
+    json.dump(metadata, f, indent=2, default=str)
+log.info("  Metadata    -> %s", os.path.abspath(metadata_path))
+log.info("All models persisted to: %s", os.path.abspath(MODELS_DIR))
 
 # Speed summary
 section("Speed Summary")

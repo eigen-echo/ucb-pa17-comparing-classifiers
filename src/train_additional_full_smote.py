@@ -440,9 +440,36 @@ smote_param_grids = {
     },
 }
 
-# Per-model parallelism: GPU SVM runs sequentially to avoid VRAM contention
-per_model_n_jobs  = {"SVM": 1 if _SVC_BACKEND == "cuml" else -1}
+# ---------------------------------------------------------------------------
+# Parallelism strategy
+#
+# GPU path (cuML):
+#   Each GridSearchCV worker runs: CPU preprocessing → CPU SMOTE → GPU SVC fit.
+#   The CPU-heavy SMOTE step naturally staggers GPU submissions across workers,
+#   so N concurrent workers do NOT all hit the GPU simultaneously.
+#   The DGX Spark's 128 GB unified memory gives ample headroom for several
+#   concurrent SVM fits (each needs ~100–300 MB, not GB).
+#
+#   _SVM_GPU_JOBS controls how many CV fits run in parallel for SVM:
+#     4  — conservative; safe starting point
+#     8  — recommended for Spark (watch `nvidia-smi` for >80% SM utilization)
+#     12 — aggressive; only raise if GPU is still under-utilised at 8
+#   Halving wall-clock time from the serialized baseline (n_jobs=1) is realistic
+#   at n_jobs=4; diminishing returns kick in as GPU becomes the bottleneck.
+#
+#   LR / KNN / DT run purely on CPU — n_jobs=-1 uses all available cores.
+#   No GPU contention risk for those models.
+#
+# CPU path (sklearn):
+#   All models use n_jobs=-1 (full CPU parallelism, no GPU to worry about).
+# ---------------------------------------------------------------------------
+_SVM_GPU_JOBS = 8   # tune: raise to 12 if `nvidia-smi` SM util stays below 80%
+
+per_model_n_jobs  = {"SVM": _SVM_GPU_JOBS if _SVC_BACKEND == "cuml" else -1}
 per_model_verbose = {"SVM": 3 if _SVC_BACKEND == "cuml" else 0}
+
+log.info("SVM GridSearchCV n_jobs: %s",
+         _SVM_GPU_JOBS if _SVC_BACKEND == "cuml" else "-1 (all CPU cores)")
 
 
 def run_gridsearch(pipes, param_grids, label):
