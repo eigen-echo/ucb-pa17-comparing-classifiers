@@ -86,7 +86,7 @@ Both runs executed the same 5-fold stratified `GridSearchCV` over 40 SVM paramet
 
 ## Why the GPU SVM Grid Search Is Slower
 
-This is the most counterintuitive result of the experiment. A GPU should be faster - and per individual fit it is: the baseline single SVC fit completes in ~5s on the DGX Spark vs ~19s on the CPU laptop (**~3.8× faster per fit**). Yet the 200-fit grid search takes 1,934s on GPU vs 327s on CPU.
+This is the most counterintuitive result of the experiment. A GPU should be faster - and per individual fit it is: the baseline single SVC fit completes in ~ 5s on the DGX Spark vs ~ 19s on the CPU laptop (**~3.8× faster per fit**). Yet the 200-fit grid search takes 1,934s on GPU vs 327s on CPU.
 
 The explanation is parallelism:
 
@@ -139,16 +139,16 @@ The DGX Spark's ARM CPU also outperforms the Windows laptop for the sklearn mode
 <tr>
 <td align="center" width="50%">
 <img src="../outputs/02-cpu/comparison_roc_curves.png" width="100%" alt="CPU ROC curves"/>
-<em>CPU — sklearn (capped)<br>LR 0.781 · DT 0.772 · KNN 0.754 · SVM 0.730</em>
+<em>CPU - sklearn (capped)<br>LR 0.781 · DT 0.772 · KNN 0.754 · SVM 0.730</em>
 </td>
 <td align="center" width="50%">
 <img src="../outputs/02-gpu/comparison_roc_curves.png" width="100%" alt="GPU ROC curves"/>
-<em>GPU — cuML (converged)<br>LR 0.781 · DT 0.772 · KNN 0.763 · SVM 0.701</em>
+<em>GPU - cuML (converged)<br>LR 0.781 · DT 0.772 · KNN 0.763 · SVM 0.701</em>
 </td>
 </tr>
 </table>
 
-The ordering is unchanged across both runs. The converged GPU SVM (0.701) lands slightly below the CPU SVM (0.730) in test ROC-AUC despite a higher CV ROC-AUC (0.714 vs 0.698), with the two runs selecting different kernels — `linear` on GPU vs `rbf` on CPU — suggesting both are near-equivalent local optima on this dataset.
+The ordering is unchanged across both runs. The converged GPU SVM (0.701) lands slightly below the CPU SVM (0.730) in test ROC-AUC despite a higher CV ROC-AUC (0.714 vs 0.698), with the two runs selecting different kernels - `linear` on GPU vs `rbf` on CPU - suggesting both are near-equivalent local optima on this dataset.
 
 ---
 
@@ -157,9 +157,9 @@ The ordering is unchanged across both runs. The converged GPU SVM (0.701) lands 
 
 The experiment is complete. Both a CPU (Windows, sklearn) run and a GPU (DGX Spark, cuML) run have been executed and compared. Key results:
 
-- **Convergence confirmed.** The uncapped GPU SVM converges cleanly (CV ROC-AUC 0.698); the CPU-capped equivalent was degenerate (CV ROC-AUC 0.348 — below random). The iteration cap was masking a valid model, not a fundamental SVM limitation.
+- **Convergence confirmed.** The uncapped GPU SVM converges cleanly (CV ROC-AUC 0.698); the CPU-capped equivalent was degenerate (CV ROC-AUC 0.348 - below random). The iteration cap was masking a valid model, not a fundamental SVM limitation.
 - **GPU grid search is slower in wall-clock time.** Per-fit training is ~3.8× faster on GPU, but serializing all 200 fits (`n_jobs=1` to avoid VRAM contention) means total GridSearchCV takes 1,934s on GPU vs 327s on CPU with parallelism across 20 cores.
-- **GPU wins decisively on inference.** SVM prediction time drops from 5.0s (CPU) to 0.088s (GPU) on the ~10K test set — a 57× speedup relevant for scoring large client lists.
+- **GPU wins decisively on inference.** SVM prediction time drops from 5.0s (CPU) to 0.088s (GPU) on the ~10K test set - a 57× speedup relevant for scoring large client lists.
 - **The original recommendation stands.** Even with full convergence, SVM (best Test ROC-AUC 0.730) does not displace Logistic Regression (0.781). The data's decision boundary is well-approximated linearly, which LR finds more efficiently.
 - **Setup friction is real.** RAPIDS requires `mamba`, `scikit-learn` must be pinned to `1.5.x` (sklearn 1.6 introduced `__sklearn_tags__()` which cuML has not yet implemented), and cuML's `SVC.predict_proba` raises unless `probability=True` is set at fit time.
 - **The two runs found different optimal kernels.** CPU GridSearchCV settled on `rbf` (C=0.1); GPU settled on `linear` (C=0.01). Their test ROC-AUC scores (0.730 vs 0.701) and CV ROC-AUC scores (0.698 vs 0.714) are close enough to suggest both kernels are near-equivalent on this dataset, and the rbf/linear choice at this scale is not decisive.
@@ -186,6 +186,70 @@ The findings from `docs/findings.md` - that Logistic Regression is the recommend
 
 ---
 
+## Business Implications of SMOTE on the Full Dataset
+
+Having access to the DGX Spark also let me run a SMOTE variant (`src/train_additional_full_smote.py`) on the same 41K-row `bank-additional-full.csv` dataset - something I could only do on the smaller 4,500-row dataset on my CPU laptop in notebook 04. Running it at full scale let me put real numbers against a question I deliberately left open in the CEO section of `docs/findings.md`: **how many more real "yes" subscribers will a SMOTE-enabled model find, and what does it cost in wasted calls to get them?**
+
+### Scenario: 10,000-client campaign at the ~11% base rate
+
+The dataset's average conversion rate sits at ~11%, so a typical 10,000-client campaign contains roughly **1,100 true subscribers** and **8,900 non-subscribers**. Here is what each strategy looks like when I apply it to that mix at the default 0.5 decision threshold:
+
+| Strategy | Calls Placed | True "Yes" Caught | Wasted Calls | Hit Rate | "Yes" Missed |
+|---|:-:|:-:|:-:|:-:|:-:|
+| **Call everyone (no model)** | 10,000 | 1,100 | 8,900 | 11% | 0 |
+| **Baseline LR** (Recall 0.22, Acc 0.90) | ~385 | ~242 | ~143 | **63%** | ~858 |
+| **SMOTE LR** (Recall 0.61, Acc 0.82) | ~2,090 | ~676 | ~1,410 | **32%** | ~424 |
+| **SMOTE SVM** (Recall 0.60, F1 0.45) | ~1,830 | ~655 | ~1,180 | **36%** | ~445 |
+
+*Numbers derived from the confusion matrix implied by Accuracy + Recall on a 1,100/8,900 class split.*
+
+### The headline tradeoff
+
+**SMOTE-LR finds roughly 2.8× as many real subscribers as the baseline LR model (676 vs 242), at the cost of roughly 10× as many false-positive calls (1,410 vs 143).**
+
+The way I think about it: each **additional** subscriber you gain by switching from baseline to SMOTE costs you about **4 extra wasted calls**:
+
+> (1,410 − 143 wasted) / (676 − 242 caught) ≈ **~3.9 extra calls per extra "yes"**
+
+That is the number I would put in front of any business stakeholder before they chose a mode.
+
+### How this sits against the "30–50% call volume reduction" claim in `findings.md`
+
+In `findings.md` I wrote that a deployed classifier could "reduce total call volume by 30–50% while maintaining or improving successful subscriptions." Running SMOTE at scale has sharpened that claim into two concrete operating points:
+
+- **Baseline LR at threshold 0.5:** I save **96%** of calls (385 vs 10,000) but only catch **22%** of real subscribers. That is far beyond the 30–50% range I quoted - and the cost is missing roughly 78% of potential yes-sayers. Too aggressive to be useful as a standalone setting.
+- **SMOTE LR at threshold 0.5:** I save **79%** of calls (2,090 vs 10,000) while catching **61%** of real subscribers. This is the operating point that actually delivers on the "maintain or improve subscriptions" side of the promise.
+
+SMOTE does not change my core recommendation. What it does is give the bank a **second lever on the same LR model** - baseline LR is the "minimise effort" dial; SMOTE LR is the "maximise subscriber capture" dial.
+
+### The break-even math
+
+If I let **V** = revenue from one new term deposit subscriber and **C** = cost of one call, then switching from baseline LR to SMOTE LR is profitable when:
+
+> **434 × V  >  1,267 × C**  →  **V / C  >  ~2.9**
+
+In other words: if a successful subscription is worth more than roughly three calls' worth of agent time, SMOTE LR pays off. For a term deposit product - typically worth tens of dollars in net interest margin over its lifetime against a ~$1–5 outbound call cost - that break-even is almost certainly crossed by an order of magnitude. My read is that **for any realistic V/C ratio in retail banking, SMOTE LR is the better business choice**, and the CEO should be asking their finance team for that number rather than leaving it to the model.
+
+### My recommendation: two named operating modes
+
+Rather than debating which model to ship, I would give the business a dial with two named positions:
+
+| Mode | Threshold | Calls (of 10K) | Hit Rate | Subscribers Caught | When to use |
+|------|:---------:|:--------------:|:--------:|:-----------------:|----------|
+| **Conservative** | ~0.5 (baseline LR) | ~385 (4%) | 63% | ~242 (22%) | Low-margin products; agent capacity is the bottleneck |
+| **Aggressive** | ~0.25 (SMOTE LR) | ~2,090 (21%) | 32% | ~676 (61%) | High-margin products like term deposits; growth is the priority |
+
+The single knob I would hand over is the **probability threshold**. SMOTE is one way to shift it; a calibrated baseline LR with an explicit threshold is another. Either way, the tradeoff now has a price tag attached: **~4 extra wasted calls per extra subscriber gained**. That is a business decision, not a modelling one.
+
+### What I would flag before shipping
+
+- **Precision drops from 63% → 32%.** In aggressive mode, agents will hear "no" about twice as often per call. Whether morale and script quality hold under that rejection rate is a management variable I cannot model - but it is worth a pilot before a full rollout.
+- **Accuracy falls from 90% → 82%.** I want to be clear this is expected and *correct*. Accuracy was always a misleading metric here - a model that says "no" to everyone scores 88.9% on this dataset without learning anything.
+- **ROC-AUC is effectively unchanged** (0.781 → 0.778). SMOTE did not produce a fundamentally better ranker. It shifted the decision boundary of the *same* model toward recall. The underlying discriminative power of LR is unchanged - I am just asking it to cast a wider net.
+- **SVM surprised me most here.** On this dataset, SVM was the single biggest beneficiary of SMOTE: Recall 0.08 → 0.60, F1 0.15 → 0.45, ROC-AUC 0.70 → 0.77. A SMOTE-trained SVM is now competitive with LR on F1 (0.446 vs ~0.429) - the first result across this entire project where SVM is operationally viable. I still recommend LR for deployment (simpler, interpretable, faster), but if someone insisted on SVM, the SMOTE variant is no longer embarrassing.
+
+---
+
 ## Cloud Equivalent and Rental Cost
 
 The GB10 in the DGX Spark is a **personal AI desktop chip** - not a datacenter Blackwell (B100/B200). I was priveleged to have access to one but not everyone has one lying around. Its 48 SMs, 6,144 CUDA cores, and 128 GB unified CPU+GPU memory pool make it roughly comparable to a single H100 for cuML SVM workloads, though the H100's memory bandwidth (3.35 TB/s vs ~273 GB/s on the GB10 GPU portion) would make the 200-fit GridSearchCV meaningfully faster.
@@ -206,4 +270,4 @@ The GB10 in the DGX Spark is a **personal AI desktop chip** - not a datacenter B
 
 An **AWS `g5.xlarge`** ($1.01/hr) or a **single H100 on Lambda Labs / Vast.ai** ($1.49–2.49/hr) would reproduce this experiment for **under $5**. The H100's superior memory bandwidth means the SVM GridSearchCV that took 32 minutes on the GB10 would likely complete in 10–15 minutes, so 1 hour of rental time is sufficient rather than 2.
 
-The unified memory architecture of the GB10 (128 GB shared CPU+GPU) is not a factor for this specific workload — the preprocessed training matrix for 41K rows fits comfortably within 24 GB of VRAM.
+The unified memory architecture of the GB10 (128 GB shared CPU+GPU) is not a factor for this specific workload - the preprocessed training matrix for 41K rows fits comfortably within 24 GB of VRAM.

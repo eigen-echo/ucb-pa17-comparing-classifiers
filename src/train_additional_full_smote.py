@@ -356,7 +356,7 @@ log.info("  Accuracy : %.4f  (+/- %.4f)", cv_acc_svm.mean(), cv_acc_svm.std())
 log.info("  ROC-AUC  : %.4f  (+/- %.4f)", cv_auc_svm.mean(), cv_auc_svm.std())
 
 # ===========================================================================
-# 8. GridSearchCV — Baseline vs SMOTE (all models)
+# 8. GridSearchCV - Baseline vs SMOTE (all models)
 # ===========================================================================
 section("GridSearchCV - Baseline vs SMOTE (all models)")
 
@@ -434,7 +434,7 @@ smote_param_grids = {
     },
     "SVM": {
         "smote__k_neighbors": [3, 5, 7],
-        "model__C":           [0.01, 0.1, 1, 10, 100],
+        "model__C":           [0.01, 0.1, 1, 10],
         "model__kernel":      ["linear", "poly", "rbf", "sigmoid"],
         "model__gamma":       ["scale", "auto"],
     },
@@ -451,13 +451,13 @@ smote_param_grids = {
 #   concurrent SVM fits (each needs ~100–300 MB, not GB).
 #
 #   _SVM_GPU_JOBS controls how many CV fits run in parallel for SVM:
-#     4  — conservative; safe starting point
-#     8  — recommended for Spark (watch `nvidia-smi` for >80% SM utilization)
-#     12 — aggressive; only raise if GPU is still under-utilised at 8
+#     4  - conservative; safe starting point
+#     8  - recommended for Spark (watch `nvidia-smi` for >80% SM utilization)
+#     12 - aggressive; only raise if GPU is still under-utilised at 8
 #   Halving wall-clock time from the serialized baseline (n_jobs=1) is realistic
 #   at n_jobs=4; diminishing returns kick in as GPU becomes the bottleneck.
 #
-#   LR / KNN / DT run purely on CPU — n_jobs=-1 uses all available cores.
+#   LR / KNN / DT run purely on CPU - n_jobs=-1 uses all available cores.
 #   No GPU contention risk for those models.
 #
 # CPU path (sklearn):
@@ -575,7 +575,7 @@ for _, b_row in base_df.iterrows():
              b_row["Model"], b_row["Recall (yes)"], s_row["Recall (yes)"], prefix, delta)
 
 # ===========================================================================
-# 10. Comparison plots — Baseline vs SMOTE
+# 10. Comparison plots - Baseline vs SMOTE
 # ===========================================================================
 section("Saving comparison plots")
 

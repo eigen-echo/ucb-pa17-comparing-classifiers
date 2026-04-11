@@ -336,7 +336,7 @@ param_grids = {
     "SVM": {
         "pipe": svm_pipe,
         "params": {
-            "model__C":      [0.01, 0.1, 1, 10, 100],
+            "model__C":      [0.01, 0.1, 1, 10],
             "model__kernel": ["linear", "poly", "rbf", "sigmoid"],
             "model__gamma":  ["scale", "auto"],
         },
