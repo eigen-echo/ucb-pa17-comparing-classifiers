@@ -385,7 +385,7 @@ base_pipes = {
 
 base_param_grids = {
     "Logistic Regression": {
-        "model__C":      [0.005, 0.01, 0.1, 1, 10],
+        "model__C":      [0.01, 0.1, 1, 10],
         "model__solver": ["lbfgs", "liblinear"],
     },
     "KNN": {
@@ -399,7 +399,7 @@ base_param_grids = {
         "model__criterion":         ["gini", "entropy"],
     },
     "SVM": {
-        "model__C":      [0.005, 0.01, 0.1, 1, 10],
+        "model__C":      [0.01, 0.1, 0.5],
         "model__kernel": ["linear", "poly", "rbf", "sigmoid"],
         "model__gamma":  ["scale", "auto"],
     },
@@ -433,8 +433,8 @@ smote_param_grids = {
         "model__criterion":         ["gini", "entropy"],
     },
     "SVM": {
-        "smote__k_neighbors": [3, 5, 7, 9],
-        "model__C":           [0.005, 0.01, 0.1, 1, 10],
+        "smote__k_neighbors": [9, 13, 17, 21],
+        "model__C":           [0.01, 0.1, 0.5],
         "model__kernel":      ["linear", "poly", "rbf", "sigmoid"],
         "model__gamma":       ["scale", "auto"],
     },
