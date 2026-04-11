@@ -385,11 +385,11 @@ base_pipes = {
 
 base_param_grids = {
     "Logistic Regression": {
-        "model__C":      [0.01, 0.1, 1, 10],
+        "model__C":      [0.005, 0.01, 0.1, 1, 10],
         "model__solver": ["lbfgs", "liblinear"],
     },
     "KNN": {
-        "model__n_neighbors": [3, 5, 11, 21, 29],
+        "model__n_neighbors": [3, 5, 11, 21, 29, 41],
         "model__weights":     ["uniform", "distance"],
         "model__metric":      ["euclidean", "manhattan"],
     },
@@ -399,7 +399,7 @@ base_param_grids = {
         "model__criterion":         ["gini", "entropy"],
     },
     "SVM": {
-        "model__C":      [0.01, 0.1, 1, 10],
+        "model__C":      [0.005, 0.01, 0.1, 1, 10],
         "model__kernel": ["linear", "poly", "rbf", "sigmoid"],
         "model__gamma":  ["scale", "auto"],
     },
@@ -416,25 +416,25 @@ smote_pipes = {
 # SMOTE grids extend the baseline grids with smote__k_neighbors tuning
 smote_param_grids = {
     "Logistic Regression": {
-        "smote__k_neighbors": [3, 5, 7],
+        "smote__k_neighbors": [3, 5, 7, 9],
         "model__C":           [0.01, 0.1, 1, 10],
         "model__solver":      ["lbfgs", "liblinear"],
     },
     "KNN": {
-        "smote__k_neighbors":  [3, 5, 7],
-        "model__n_neighbors":  [3, 5, 11, 21, 29],
+        "smote__k_neighbors":  [3, 5, 7, 9],
+        "model__n_neighbors":  [3, 5, 11, 21, 29, 41],
         "model__weights":      ["uniform", "distance"],
         "model__metric":       ["euclidean", "manhattan"],
     },
     "Decision Tree": {
-        "smote__k_neighbors":       [3, 5, 7],
+        "smote__k_neighbors":       [3, 5, 7, 9],
         "model__max_depth":         [3, 5, 10, None],
         "model__min_samples_split": [2, 10, 20],
         "model__criterion":         ["gini", "entropy"],
     },
     "SVM": {
-        "smote__k_neighbors": [3, 5, 7],
-        "model__C":           [0.01, 0.1, 1, 10],
+        "smote__k_neighbors": [3, 5, 7, 9],
+        "model__C":           [0.005, 0.01, 0.1, 1, 10],
         "model__kernel":      ["linear", "poly", "rbf", "sigmoid"],
         "model__gamma":       ["scale", "auto"],
     },
@@ -463,7 +463,7 @@ smote_param_grids = {
 # CPU path (sklearn):
 #   All models use n_jobs=-1 (full CPU parallelism, no GPU to worry about).
 # ---------------------------------------------------------------------------
-_SVM_GPU_JOBS = 8   # tune: raise to 12 if `nvidia-smi` SM util stays below 80%
+_SVM_GPU_JOBS = 16   # tune: raise to 12 if `nvidia-smi` SM util stays below 80%
 
 per_model_n_jobs  = {"SVM": _SVM_GPU_JOBS if _SVC_BACKEND == "cuml" else -1}
 per_model_verbose = {"SVM": 3 if _SVC_BACKEND == "cuml" else 0}
