@@ -186,6 +186,99 @@ The findings from `docs/findings.md` - that Logistic Regression is the recommend
 
 ---
 
+## SMOTE Grid Search - Four Runs on the DGX Spark
+
+After the initial CPU vs GPU comparison, I ran the SMOTE training script (`src/train_additional_full_smote.py`) four times on the DGX Spark, each time tightening the grid based on what the previous run revealed. I'm documenting all four here because Run 3 produced a concrete failure mode that I think is more instructive than any of the clean results.
+
+### Run summary table
+
+| Run | `n_jobs` | C grid | `k_neighbors` grid | Baseline SVM GS | SMOTE SVM GS | Baseline Recall | SMOTE Recall | `k_n` winner |
+|-----|:--------:|--------|-------------------|:---------------:|:------------:|:---------------:|:------------:|:------------:|
+| **1** - Sequential baseline | 1 | `{0.01, 0.1, 1, 10}` | `{3, 5, 7}` | 587s | ~est. sequential | 0.0833 | 0.5950 | **7** (upper edge) |
+| **2** - Parallel + C=100 | 8 | `{0.01, 0.1, 1, 10, 100}` | `{3, 5, 7}` | 629s | 6,208s | 0.0833 | 0.5950 | **7** (upper edge) |
+| **3** - Expanded both ends | 8 | `{0.005, 0.01, 0.1, 1, 10, 100}` | `{3, 5, 7, 9}` | 657s | 2,473s | **0.0000** ⚠️ | 0.5941 | **9** (upper edge) |
+| **4** - Trimmed + extended k_n | 8 | `{0.05, 0.1, 0.5}` | `{9, 13, 17, 21}` | 147s | 871s | 0.0833 | 0.5941 | **9** (lower edge) ✅ |
+
+Non-SVM models (LR, KNN, DT) reproduced to four decimal places across all four runs. Every baseline and SMOTE score for those models is identical regardless of which SVM grid was running alongside them - the pipeline isolation is clean.
+
+---
+
+### Finding 1 - C=0.005 collapsed the baseline SVM into a degenerate classifier
+
+Run 3 added `C=0.005` to the lower end of the C grid to explore whether more aggressive regularization could help. It could not. The baseline SVM in Run 3 produced:
+
+```
+Test Accuracy : 0.8880    ← matches the majority-class rate exactly
+Recall (yes)  : 0.0000    ← predicts "no" for every single test row
+F1 (yes)      : 0.0000
+```
+
+A model with 88.8% accuracy and zero recall is not a classifier - it is a rule that says "always no." It achieves its accuracy score purely because 88.8% of the dataset *is* "no." Any model that matches the majority-class proportion in accuracy while predicting nothing in the minority class has collapsed to this trivial solution.
+
+The mechanism is straightforward: at `C=0.005`, the regularisation penalty is so heavy that the SVM cannot form a margin that includes *any* minority-class support vectors without paying more penalty than it gains. The optimiser finds that the cheapest solution is to place the decision hyperplane such that the entire feature space maps to "no." Geometrically valid, commercially useless.
+
+Dropping `C=0.005` in Run 4 immediately recovered the baseline SVM to **Recall 0.0833, F1 0.1507, Test ROC-AUC 0.7014** - identical to Runs 1 and 2. The damage was fully reversible; no model was harmed permanently, but it cost a full run to discover it.
+
+**Practical rule I am taking from this:** on imbalanced classification problems, the lower bound of a C grid should be no smaller than the value where the model can still form at least one minority-class support vector. For this dataset on a linear kernel, that bound appears to be around `C=0.01`. I would not go below it again without also monitoring minority-class recall during CV fold scoring.
+
+---
+
+### Finding 2 - ROC-AUC alone is an insufficient CV scorer for imbalanced data
+
+The degenerate baseline SVM in Run 3 was *chosen by GridSearchCV*. The CV scorer was `roc_auc`. With `C=0.005`, the best params were:
+
+```
+{'model__C': 0.005, 'model__gamma': 'scale', 'model__kernel': 'linear'}
+CV ROC-AUC : 0.7170
+```
+
+GridSearchCV saw a CV ROC-AUC of **0.7170** and selected it as the best parameter combination. This is higher than the winner in Run 1 (`C=0.01`, CV ROC-AUC 0.7142). So the scorer correctly preferred `C=0.005` - by the metric it was given.
+
+The problem is what ROC-AUC measures: it evaluates the *ranking* quality of the model's decision function, not whether the model predicts the minority class at all. A model that outputs a decision function with a slope of ε toward the minority class - barely tilted, never crossing the 0.5 threshold - can still produce a reasonable ROC-AUC if the tiny slope happens to rank true positives slightly above true negatives. The curve cares about relative ordering, not absolute prediction.
+
+This is a known failure mode for ROC-AUC on severely imbalanced data. The alternative scorers that would have caught this:
+
+| Scorer | What it would have done |
+|--------|------------------------|
+| `f1` | F1=0.0 on any degenerate "always no" model → would have rejected `C=0.005` immediately |
+| `average_precision` | Area under precision-recall curve; AP=0.0 for a model with zero recall → same rejection |
+| `balanced_accuracy` | Averages recall per class; 0% minority recall tanks the score regardless of majority-class accuracy |
+| `recall` | Directly measures what we care about; zero recall = zero score, `C=0.005` would never win |
+
+For this project I kept `roc_auc` as the scorer to stay consistent with the other notebooks and to remain comparable across runs. But I would not recommend `roc_auc` as the *only* scorer when deploying a model for imbalanced production data. My preferred pattern for the next iteration would be to use `average_precision` (which cares exclusively about the minority class) or a composite metric like `f1_weighted`, and cross-reference CV ROC-AUC as a secondary sanity check rather than the selection criterion.
+
+The collapse in Run 3 is, in a strange way, the most useful result of the four-run series - it is a live demonstration of the statement I made in `findings.md`: *"Accuracy alone is a misleading metric for imbalanced classification."* ROC-AUC is more informative than accuracy, but it is not immune to the same failure when the class imbalance is severe enough and the regularisation grid reaches far enough into the degenerate region.
+
+---
+
+### Finding 3 - SMOTE `k_neighbors=9` is the confirmed optimum for SVM on this dataset
+
+Across the four runs, the SMOTE SVM `k_neighbors` winner followed a consistent pattern:
+
+| Run | k_n grid | Winner | Position in grid |
+|-----|----------|:------:|:----------------:|
+| 1 | `{3, 5, 7}` | **7** | upper edge |
+| 2 | `{3, 5, 7}` | **7** | upper edge |
+| 3 | `{3, 5, 7, 9}` | **9** | upper edge |
+| 4 | `{9, 13, 17, 21}` | **9** | **lower edge** ✅ |
+
+Runs 1–3 all selected the upper edge of their respective grids - a reliable signal that the search space needed to be extended upward. Run 4 extended the grid to `{9, 13, 17, 21}` and `k_neighbors=9` won again, this time at the *lower edge*. When the winner sits at the lower edge of an extended grid, it means the optimum is inside the previous search space and the extension confirmed rather than shifted the boundary.
+
+**`k_neighbors=9` is now ratified as the tuned SMOTE parameter for SVM on this dataset.** Larger values (13, 17, 21) do not help - the neighbourhood is wide enough at 9 to produce diverse synthetic samples without generating implausible ones.
+
+The physical intuition: with ~4,500 minority-class training samples in the 41K dataset, a neighbourhood of 9 gives SMOTE enough density context to interpolate realistically between genuine minority points. Smaller neighbourhoods (3, 5) under-smooth the synthetic samples and leave them too clustered around the original data; larger values (13+) start averaging over examples that are no longer semantically similar neighbours. The SVM's support-vector-based decision boundary is particularly sensitive to where synthetic samples land near the margin - which is why LR, which optimises over all points, converges at `k_neighbors=5` and is less sensitive to this parameter.
+
+The final settled SMOTE SVM best params across Runs 3 and 4:
+
+```
+C=0.1, kernel=linear, gamma=auto, smote__k_neighbors=9
+CV ROC-AUC : 0.7848    Test ROC-AUC : 0.7736
+Recall (yes): 0.5941   F1 (yes)     : 0.4463
+GridSearch  : 871s (trimmed grid, n_jobs=8)
+```
+
+---
+
 ## Business Implications of SMOTE on the Full Dataset
 
 Having access to the DGX Spark also let me run a SMOTE variant (`src/train_additional_full_smote.py`) on the same 41K-row `bank-additional-full.csv` dataset - something I could only do on the smaller 4,500-row dataset on my CPU laptop in notebook 04. Running it at full scale let me put real numbers against a question I deliberately left open in the CEO section of `docs/findings.md`: **how many more real "yes" subscribers will a SMOTE-enabled model find, and what does it cost in wasted calls to get them?**
